@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مقيّم العناوين</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<meta name="theme-color" content="#0f766e">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f23;--mut:#667085;--bd:#e4e7ec;--pri:#0f766e;--ok:#067647;--okb:#d1fadf;--wr:#b54708;--wrb:#fef0c7;--er:#b42318;--erb:#fee4e2;--mm:#6941c6;--mmb:#ebe9fe}
+@media(prefers-color-scheme:dark){:root{--bg:#101418;--card:#1a2027;--tx:#eceff3;--mut:#98a2b3;--bd:#2c3642;--pri:#2dd4bf;--ok:#6ce9a6;--okb:#0b3b25;--wr:#fec84b;--wrb:#4a2f05;--er:#fda29b;--erb:#4a1410;--mm:#c3b5fd;--mmb:#2a1f55}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--tx);padding:0 12px 40px;font-size:15px}
+.w{max-width:980px;margin:0 auto}
+h1{font-size:20px;margin:16px 0 4px}p.s{color:var(--mut);margin:0 0 12px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+textarea{width:100%;min-height:130px;border:1px solid var(--bd);border-radius:8px;padding:10px;font:inherit;background:var(--bg);color:var(--tx);resize:vertical}
+button,select,input[type=text]{font:inherit;border-radius:8px;border:1px solid var(--bd);padding:8px 12px;background:var(--card);color:var(--tx)}
+button{cursor:pointer}button.p{background:var(--pri);color:#fff;border-color:var(--pri)}
+html[data-d] button.p{color:#003}
+.r{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.chips button.on{outline:2px solid var(--pri)}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.sum div{border-radius:10px;padding:8px;text-align:center;font-size:13px}.sum b{display:block;font-size:22px}
+.ok{background:var(--okb);color:var(--ok)}.review{background:var(--wrb);color:var(--wr)}.incomplete{background:var(--erb);color:var(--er)}.mismatch{background:var(--mmb);color:var(--mm)}.all{background:var(--bd)}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
+th,td{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:right;vertical-align:top}th{color:var(--mut);font-weight:600}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;white-space:nowrap}
+.miss{color:var(--er)}.note{color:var(--mut);font-size:12px}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>مقيّم العناوين</h1>
+<p class="s">الصق العناوين (عنوان في كل سطر) أو ارفع ملف CSV/TXT. التقييم بيتم على الجهاز ولا يُرسل أي بيانات.</p>
+
+<div class="c">
+<textarea id="in" placeholder="مثال:&#10;15 شارع التحرير، عمارة 4، الدور الثالث، شقة 8، مدينة نصر، القاهرة&#10;شارع الهرم، الجيزة"></textarea>
+<div class="r">
+<button class="p" id="go">تقييم</button>
+<input type="file" id="file" accept=".csv,.txt">
+<label><input type="checkbox" id="apt"> رقم الشقة إجباري</label>
+<button id="inst" hidden>تثبيت التطبيق</button>
+</div>
+</div>
+
+<div class="c" id="res" hidden>
+<div class="sum" id="sum"></div>
+<div class="r chips" id="chips"></div>
+<div class="r"><button id="exp1">تصدير الي محتاج تعديل (CSV)</button><button id="exp2">تصدير الكل (CSV)</button></div>
+<div class="tw"><table><thead><tr><th>#</th><th>العنوان</th><th>المحافظة</th><th>المنطقة</th><th>الشارع</th><th>العقار</th><th>الدور</th><th>الشقة</th><th>علامة</th><th>الحالة / الملاحظات</th></tr></thead><tbody id="tb"></tbody></table></div>
+</div>
+
+<details class="c"><summary>إضافة منطقة للقاموس (محفوظة على جهازك)</summary>
+<div class="r"><input type="text" id="an" placeholder="اسم المنطقة"><select id="ag"></select><button id="aadd">إضافة</button></div>
+<p class="note">للإضافة الدائمة لكل المستخدمين عدّل ملف areas.js على GitHub.</p></details>
+</div>
+
+<script src="areas.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const norm=s=>String(s||'').replace(/[\u064B-\u065F\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[٫]/g,'.').trim();
+const noAl=s=>s.replace(/^ال/,'');
+const STREET=new Set(['شارع','ش','طريق','حاره','ميدان','محور','كورنيش','زقاق','عطفه','كوبري','امتداد','ممر']);
+const STOP=new Set(['رقم','عماره','عقار','مبني','بنايه','برج','بلوك','مجاوره','الدور','دور','طابق','شقه','وحده','بجوار','بجانب','امام','خلف','قريب','بالقرب','علامه','مدينه','منطقه','حي','قسم','محافظه']);
+const ORD=['ارضي','اول','اولي','ثاني','تاني','ثالث','تالت','رابع','خامس','سادس','سابع','ثامن','تامن','تاسع','عاشر','حادي','ثاني عشر','ميزانين','بدروم','روف','سطح'];
+let rows=[],filter='all';
+
+function getAreas(){const a=JSON.parse(JSON.stringify(window.AREAS));try{const x=JSON.parse(localStorage.getItem('xa')||'{}');for(const g in x)(a[g]=a[g]||[]).push(...x[g])}catch(e){}return a}
+let GOV=[],AR=[];
+function build(){const A=getAreas();GOV=[];AR=[];
+ for(const g in A){const n=norm(g);GOV.push({g,v:[n,noAl(n)]});
+  A[g].forEach(a=>{const n2=norm(a);AR.push({a,g,v:[n2,noAl(n2)].filter((x,i,r)=>x&&r.indexOf(x)===i)})})}
+ GOV.push({g:'القاهرة',v:['قاهره']});GOV.push({g:'الاسكندرية',v:['اسكندريه','alex']});
+ AR.sort((x,y)=>y.v[0].length-x.v[0].length);
+ $('ag').innerHTML=Object.keys(A).map(g=>`<option>${g}</option>`).join('')}
+const has=(t,p)=>t.includes(' '+p+' ');
+const cut=(t,p)=>t.split(' '+p+' ').join(' | ');
+
+function parse(raw){
+ let t=' '+norm(raw).replace(/\./g,' ').replace(/[،,؛;:()\-\/\\]/g,' | ').replace(/\s+/g,' ')+' ';
+ const r={raw,gov:'',area:'',areaGov:'',street:'',building:'',floor:'',apt:'',landmark:'',miss:[],prob:[],status:''};
+ // المحافظة
+ for(const G of GOV){const p=G.v.find(v=>has(t,v)||has(t,'محافظه '+v));if(p){r.gov=G.g;t=cut(t,p);break}}
+ // المنطقة (من القاموس)
+ for(const A of AR){const p=A.v.find(v=>has(t,v)&&![...STREET].some(k=>has(t,k+' '+v)));if(p){r.area=A.a;r.areaGov=A.g;t=cut(t,p);break}}
+ if(!r.area){const m=t.match(/ (?:مدينه|منطقه|حي|قسم) ([^|\d]+?)(?= \||$| (?:شارع|ش|رقم|عماره|دور|الدور|شقه))/);
+  if(m){r.area=m[1].trim();r.unk=true;t=t.replace(m[0],' | ')}}
+ t=t.replace(/ (محافظه|مدينه|منطقه|قسم|حي) /g,' | ');
+ // الشقة
+ let m=t.match(/ (?:شقه|وحده) (?:رقم )?(\d+)/);if(m){r.apt=m[1];t=t.replace(m[0],' | ')}
+ // الدور
+ m=t.match(/ (?:الدور|دور|الطابق|طابق) (?:رقم )?([^\s|]+)/);
+ if(m){r.floor=m[1];t=t.replace(m[0],' | ');const f=noAl(m[1]);if(!(/^\d+$/.test(f)||ORD.includes(f)))r.floorBad=true}
+ // علامة مميزة
+ m=t.match(/ (?:بجوار|بجانب|امام|خلف|قريب من|بالقرب من|علامه مميزه|علامه|عند) ([^|]+)/);
+ if(m){r.landmark=m[1].trim();t=t.replace(m[0],' | ')}
+ // الشارع
+ const tk=t.trim().split(' ');let cand='';
+ for(let i=0;i<tk.length;i++){if(STREET.has(tk[i])){let j=i+1,n=[];
+   while(j<tk.length&&n.length<4&&tk[j]!=='|'&&!/^\d/.test(tk[j])&&!STOP.has(tk[j])){n.push(tk[j]);j++}
+   if(n.length){r.street=tk[i]+' '+n.join(' ');
+    if(j<tk.length&&/^\d+$/.test(tk[j]))cand=tk[j];
+    else if(i>0&&/^\d+$/.test(tk[i-1]))cand=tk[i-1];
+    for(let k=i;k<j;k++)tk[k]='|';}break}}
+ const rest=' '+tk.join(' ')+' ';
+ m=rest.match(/ (?:عقار|عماره|مبني|بنايه|برج|رقم) (?:رقم )?(\d+[ا-ي]?)/);
+ r.building=m?m[1]:cand;
+ return r}
+
+function evalRow(r,needApt){
+ if(!r.gov)r.miss.push('المحافظة');
+ if(!r.area)r.miss.push('المنطقة');
+ if(!r.street)r.miss.push('الشارع');
+ if(!r.building)r.miss.push('رقم العقار/العمارة');
+ if(!r.floor)r.miss.push('الدور');
+ if(needApt&&!r.apt)r.miss.push('رقم الشقة');
+ if(!r.gov&&r.areaGov)r.prob.push('المحافظة غير مكتوبة (المنطقة تتبع '+r.areaGov+')');
+ const mm=r.gov&&r.areaGov&&r.gov!==r.areaGov;
+ if(mm)r.prob.push(`المنطقة «${r.area}» تتبع ${r.areaGov} وليس ${r.gov}`);
+ if(r.unk)r.prob.push(`المنطقة «${r.area}» غير موجودة في القاموس — راجعها`);
+ if(r.floorBad)r.prob.push(`الدور «${r.floor}» غير مفهوم`);
+ r.status=r.miss.length?'incomplete':mm?'mismatch':(r.unk||r.floorBad)?'review':'ok';
+ return r}
+const LBL={ok:'كامل',incomplete:'ناقص',mismatch:'عدم مطابقة',review:'يحتاج مراجعة'};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cell=v=>v?esc(v):'<span class="miss">—</span>';
+
+function render(){
+ const cnt={ok:0,review:0,mismatch:0,incomplete:0};rows.forEach(r=>cnt[r.status]++);
+ $('sum').innerHTML=`<div class="all"><b>${rows.length}</b>الإجمالي</div>`+Object.keys(LBL).map(k=>`<div class="${k}"><b>${cnt[k]}</b>${LBL[k]}</div>`).join('');
+ $('chips').innerHTML=['all',...Object.keys(LBL)].map(k=>`<button class="${k==='all'?'all':k} ${filter===k?'on':''}" data-k="${k}">${k==='all'?'الكل':LBL[k]}</button>`).join('');
+ $('tb').innerHTML=rows.map((r,i)=>({r,i})).filter(x=>filter==='all'||x.r.status===filter).map(({r,i})=>
+  `<tr><td>${i+1}</td><td>${esc(r.raw)}</td><td>${cell(r.gov)}</td><td>${cell(r.area)}</td><td>${cell(r.street)}</td><td>${cell(r.building)}</td><td>${cell(r.floor)}</td><td>${cell(r.apt)}</td><td>${esc(r.landmark||'')}</td>
+  <td><span class="badge ${r.status}">${LBL[r.status]}</span>${r.miss.length?`<div class="note">ناقص: ${r.miss.join('، ')}</div>`:''}${r.prob.map(p=>`<div class="note">${esc(p)}</div>`).join('')}</td></tr>`).join('');
+ $('res').hidden=false}
+
+function csv(list){const h=['العنوان','الحالة','ناقص','ملاحظات','المحافظة','المنطقة','الشارع','العقار','الدور','الشقة','علامة مميزة'];
+ const q=v=>'"'+String(v||'').replace(/"/g,'""')+'"';
+ return '\ufeff'+[h,...list.map(r=>[r.raw,LBL[r.status],r.miss.join(' | '),r.prob.join(' | '),r.gov,r.area,r.street,r.building,r.floor,r.apt,r.landmark])].map(a=>a.map(q).join(',')).join('\r\n')}
+function dl(name,txt){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));a.download=name;a.click()}
+
+$('go').onclick=()=>{build();const need=$('apt').checked;
+ rows=$('in').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>evalRow(parse(s),need));filter='all';render()};
+$('chips').onclick=e=>{const k=e.target.dataset.k;if(k){filter=k;render()}};
+$('exp1').onclick=()=>dl('addresses-problems.csv',csv(rows.filter(r=>r.status!=='ok')));
+$('exp2').onclick=()=>dl('addresses-all.csv',csv(rows));
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{$('in').value=String(fr.result).replace(/^\ufeff/,'');$('go').click()};fr.readAsText(f,'utf-8')};
+$('aadd').onclick=()=>{const a=$('an').value.trim(),g=$('ag').value;if(!a)return;let x={};try{x=JSON.parse(localStorage.getItem('xa')||'{}')}catch(e){}(x[g]=x[g]||[]).push(a);try{localStorage.setItem('xa',JSON.stringify(x))}catch(e){}$('an').value='';build();alert('تمت الإضافة')};
+let dp;addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;$('inst').hidden=false});
+$('inst').onclick=async()=>{if(dp){dp.prompt();dp=null;$('inst').hidden=true}};
+build();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
