@@ -28,6 +28,7 @@ html[data-d] button.p{color:#003}
 th,td{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:right;vertical-align:top}th{color:var(--mut);font-weight:600}
 .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;white-space:nowrap}
 .miss{color:var(--er)}.note{color:var(--mut);font-size:12px}
+dialog{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:12px;width:min(520px,94vw)}dialog::backdrop{background:#0008}dialog label{display:block;font-size:13px;color:var(--mut);margin-top:8px}dialog input,dialog select{width:100%}.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
 details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
@@ -40,8 +41,10 @@ details summary{cursor:pointer;font-weight:600}
 <textarea id="in" placeholder="مثال:&#10;15 شارع التحرير، عمارة 4، الدور الثالث، شقة 8، مدينة نصر، القاهرة&#10;شارع الهرم، الجيزة"></textarea>
 <div class="r">
 <button class="p" id="go">تقييم</button>
-<input type="file" id="file" accept=".csv,.txt">
+<input type="file" id="file" accept=".csv,.txt,.xlsx,.xls">
+<select id="prof"><option value="flex">معيار مرن (حسب أمثلتك)</option><option value="strict">معيار صارم (شارع+عقار+دور)</option></select>
 <label><input type="checkbox" id="apt"> رقم الشقة إجباري</label>
+<label id="acw" hidden>عمود العنوان: <select id="acol"></select></label>
 <button id="inst" hidden>تثبيت التطبيق</button>
 </div>
 </div>
@@ -50,50 +53,79 @@ details summary{cursor:pointer;font-weight:600}
 <div class="sum" id="sum"></div>
 <div class="r chips" id="chips"></div>
 <div class="r"><button id="exp1">تصدير الي محتاج تعديل (CSV)</button><button id="exp2">تصدير الكل (CSV)</button></div>
-<div class="tw"><table><thead><tr><th>#</th><th>العنوان</th><th>المحافظة</th><th>المنطقة</th><th>الشارع</th><th>العقار</th><th>الدور</th><th>الشقة</th><th>علامة</th><th>الحالة / الملاحظات</th></tr></thead><tbody id="tb"></tbody></table></div>
+<div class="note" id="fi" hidden></div>
+<div class="tw"><table><thead><tr><th>م / المعرّف</th><th>العنوان</th><th>المحافظة</th><th>المنطقة</th><th>الشارع</th><th>العقار</th><th>الدور</th><th>الشقة</th><th>علامة</th><th>الحالة / الملاحظات</th></tr></thead><tbody id="tb"></tbody></table></div>
 </div>
 
-<details class="c"><summary>إضافة منطقة للقاموس (محفوظة على جهازك)</summary>
-<div class="r"><input type="text" id="an" placeholder="اسم المنطقة"><select id="ag"></select><button id="aadd">إضافة</button></div>
-<p class="note">للإضافة الدائمة لكل المستخدمين عدّل ملف areas.js على GitHub.</p></details>
+<details class="c"><summary>التعلّم والقاموس <span id="lst" class="note"></span></summary>
+<p class="note">كل تصحيح تعمله (زر «تصحيح» في الجدول) بيتحفظ، والتطبيق بيستخدمه في التقييمات الجاية: المناطق الجديدة بتتضاف للقاموس، والعنوان المتصحح بيتعرف تاني.</p>
+<div class="r"><input type="text" id="an" placeholder="منطقة جديدة"><select id="ag"></select><button id="aadd">إضافة منطقة</button></div>
+<div class="r"><input type="text" id="al_v" placeholder="كتابة بديلة/غلط شائع"><input type="text" id="al_a" list="adl" placeholder="المنطقة الصحيحة"><button id="aladd">إضافة اسم بديل</button></div>
+<div class="r"><button id="lexp">تصدير التعلّم (learned.json)</button><label>استيراد: <input type="file" id="limp" accept=".json"></label><button id="lrst">مسح التعلّم</button></div>
+<p class="note">التعلّم محفوظ على جهازك. لمشاركته مع كل الأجهزة: صدّر learned.json وارفعه على الريبو جنب index.html، والتطبيق هيحمّله تلقائياً.</p></details>
+<datalist id="adl"></datalist>
+<dialog id="dlg"><b>تصحيح العنوان</b><p class="note" id="f_raw"></p>
+<div class="g2"><label>المحافظة<select id="f_gov"></select></label><label>المنطقة<input type="text" id="f_area" list="adl"></label>
+<label>الشارع<input type="text" id="f_street"></label><label>رقم العقار/العمارة<input type="text" id="f_building"></label>
+<label>الدور<input type="text" id="f_floor"></label><label>رقم الشقة<input type="text" id="f_apt"></label></div>
+<label>علامة مميزة<input type="text" id="f_landmark"></label>
+<label>التعديل المقترح الأنسب (العنوان الصحيح كامل)<textarea id="f_sugg" style="min-height:60px"></textarea></label>
+<div class="r"><button class="p" id="f_save">حفظ وتعلّم</button><button id="f_del" hidden>إلغاء التصحيح</button><button id="f_cancel">إغلاق</button></div></dialog>
 </div>
 
 <script src="areas.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const norm=s=>String(s||'').replace(/[\u064B-\u065F\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[٫]/g,'.').trim();
 const noAl=s=>s.replace(/^ال/,'');
 const STREET=new Set(['شارع','ش','طريق','حاره','ميدان','محور','كورنيش','زقاق','عطفه','كوبري','امتداد','ممر']);
+const DET=/ (?:كمبوند|كومبوند|مجمع|مول|برج|ابراج|قريه|مجاوره|مجموعه|مساكن|عمارات|قطعه|بلوك|فيلا|وحده|مشروع|عزبه|نجع|الحي|كفر) [^|]+/;
 const STOP=new Set(['رقم','عماره','عقار','مبني','بنايه','برج','بلوك','مجاوره','الدور','دور','طابق','شقه','وحده','بجوار','بجانب','امام','خلف','قريب','بالقرب','علامه','مدينه','منطقه','حي','قسم','محافظه']);
 const ORD=['ارضي','اول','اولي','ثاني','تاني','ثالث','تالت','رابع','خامس','سادس','سابع','ثامن','تامن','تاسع','عاشر','حادي','ثاني عشر','ميزانين','بدروم','روف','سطح'];
 let rows=[],filter='all';
 
-function getAreas(){const a=JSON.parse(JSON.stringify(window.AREAS));try{const x=JSON.parse(localStorage.getItem('xa')||'{}');for(const g in x)(a[g]=a[g]||[]).push(...x[g])}catch(e){}return a}
-let GOV=[],AR=[];
-function build(){const A=getAreas();GOV=[];AR=[];
+let L={areas:{},aliases:{},overrides:{},floors:[]};
+function mergeL(x,base){if(!x)return;const u=(a,b)=>[...new Set([...(a||[]),...(b||[])])];
+ for(const g in (x.areas||{}))L.areas[g]=u(L.areas[g],x.areas[g]);
+ L.aliases=base?{...x.aliases,...L.aliases}:{...L.aliases,...x.aliases};
+ L.overrides=base?{...x.overrides,...L.overrides}:{...L.overrides,...x.overrides};
+ L.floors=u(L.floors,x.floors)}
+function saveL(){try{localStorage.setItem('learn',JSON.stringify(L))}catch(e){}}
+(function(){try{mergeL(JSON.parse(localStorage.getItem('learn')||'null'));const x=JSON.parse(localStorage.getItem('xa')||'{}');for(const g in x)(L.areas[g]=L.areas[g]||[]).push(...x[g])}catch(e){}})();
+const floorOk=f=>{f=noAl(norm(f));return /^\d+$/.test(f)||ORD.includes(f)||L.floors.includes(f)};
+function getAreas(){const a=JSON.parse(JSON.stringify(window.AREAS));for(const g in L.areas)(a[g]=a[g]||[]).push(...L.areas[g]);return a}
+let GOV=[],AR=[],ALI=[],AREG={};
+function build(){const A=getAreas();GOV=[];AR=[];AREG={};
  for(const g in A){const n=norm(g);GOV.push({g,v:[n,noAl(n)]});
-  A[g].forEach(a=>{const n2=norm(a);AR.push({a,g,v:[n2,noAl(n2)].filter((x,i,r)=>x&&r.indexOf(x)===i)})})}
+  A[g].forEach(a=>{const n2=norm(a);if(n2!==n)AR.push({a,g,v:[n2]});(AREG[n2]=AREG[n2]||[]);if(!AREG[n2].includes(g))AREG[n2].push(g)})}
  GOV.push({g:'القاهرة',v:['قاهره']});GOV.push({g:'الاسكندرية',v:['اسكندريه','alex']});
  AR.sort((x,y)=>y.v[0].length-x.v[0].length);
- $('ag').innerHTML=Object.keys(A).map(g=>`<option>${g}</option>`).join('')}
+ ALI=Object.entries(L.aliases).map(([v,a])=>({v,a})).sort((x,y)=>y.v.length-x.v.length);
+ const og=Object.keys(A).map(g=>`<option>${g}</option>`).join('');$('ag').innerHTML=og;$('f_gov').innerHTML='<option value="">—</option>'+og;
+ $('adl').innerHTML=[...new Set(AR.map(x=>x.a))].map(a=>`<option value="${a}">`).join('');stats()}
+function applyO(r,o){['gov','area','street','building','floor','apt','landmark'].forEach(k=>r[k]=o[k]||'');r.areaGovs=AREG[norm(r.area)]||[];r.unk=!!r.area&&!r.areaGovs.length;r.floorBad=!!r.floor&&!floorOk(r.floor);r.fixed=true;r.sugg=o.sugg||''}
+function stats(){const n=Object.values(L.areas).reduce((a,b)=>a+b.length,0);$('lst').textContent=`(مناطق متعلَّمة ${n} · أسماء بديلة ${Object.keys(L.aliases).length} · تصحيحات ${Object.keys(L.overrides).length})`}
 const has=(t,p)=>t.includes(' '+p+' ');
 const cut=(t,p)=>t.split(' '+p+' ').join(' | ');
 
 function parse(raw){
- let t=' '+norm(raw).replace(/\./g,' ').replace(/[،,؛;:()\-\/\\]/g,' | ').replace(/\s+/g,' ')+' ';
- const r={raw,gov:'',area:'',areaGov:'',street:'',building:'',floor:'',apt:'',landmark:'',miss:[],prob:[],status:''};
- // المحافظة
- for(const G of GOV){const p=G.v.find(v=>has(t,v)||has(t,'محافظه '+v));if(p){r.gov=G.g;t=cut(t,p);break}}
+ let t=' '+norm(raw).replace(/(\d)([ا-ي])/g,'$1 $2').replace(/([ا-ي])(\d)/g,'$1 $2').replace(/\./g,' ').replace(/[،,؛;:()\-\/\\]/g,' | ').replace(/\s+/g,' ')+' ';
+ const r={raw,gov:'',area:'',areaGovs:[],street:'',building:'',floor:'',apt:'',landmark:'',miss:[],prob:[],status:''};
  // المنطقة (من القاموس)
- for(const A of AR){const p=A.v.find(v=>has(t,v)&&![...STREET].some(k=>has(t,k+' '+v)));if(p){r.area=A.a;r.areaGov=A.g;t=cut(t,p);break}}
+ for(const X of ALI){if(has(t,X.v)&&![...STREET].some(k=>has(t,k+' '+X.v))){r.area=X.a;r.areaGovs=AREG[norm(X.a)]||[];t=cut(t,X.v);break}}
+ if(!r.area)for(const A of AR){const p=A.v.find(v=>has(t,v)&&![...STREET].some(k=>has(t,k+' '+v)));if(p){r.area=A.a;r.areaGovs=AREG[norm(A.a)]||[];t=cut(t,p);break}}
+ // المحافظة
+ {let bi=1e9,bp='',bg='';for(const G of GOV)for(const v of G.v){const k=t.indexOf(' '+v+' ');if(k>=0&&k<bi){bi=k;bp=v;bg=G.g}}if(bg){r.gov=bg;t=cut(t,bp)}}
+ if(!r.area&&r.gov&&(AREG[norm(r.gov)]||[]).includes(r.gov)){r.area=r.gov;r.areaGovs=[r.gov]}
  if(!r.area){const m=t.match(/ (?:مدينه|منطقه|حي|قسم) ([^|\d]+?)(?= \||$| (?:شارع|ش|رقم|عماره|دور|الدور|شقه))/);
   if(m){r.area=m[1].trim();r.unk=true;t=t.replace(m[0],' | ')}}
  t=t.replace(/ (محافظه|مدينه|منطقه|قسم|حي) /g,' | ');
  // الشقة
- let m=t.match(/ (?:شقه|وحده) (?:رقم )?(\d+)/);if(m){r.apt=m[1];t=t.replace(m[0],' | ')}
+ let m=t.match(/ شقه (?:رقم )?(\d+)/);if(m){r.apt=m[1];t=t.replace(m[0],' | ')}
  // الدور
  m=t.match(/ (?:الدور|دور|الطابق|طابق) (?:رقم )?([^\s|]+)/);
- if(m){r.floor=m[1];t=t.replace(m[0],' | ');const f=noAl(m[1]);if(!(/^\d+$/.test(f)||ORD.includes(f)))r.floorBad=true}
+ if(m){r.floor=m[1];t=t.replace(m[0],' | ');if(!floorOk(m[1]))r.floorBad=true}
  // علامة مميزة
  m=t.match(/ (?:بجوار|بجانب|امام|خلف|قريب من|بالقرب من|علامه مميزه|علامه|عند) ([^|]+)/);
  if(m){r.landmark=m[1].trim();t=t.replace(m[0],' | ')}
@@ -104,22 +136,23 @@ function parse(raw){
    if(n.length){r.street=tk[i]+' '+n.join(' ');
     if(j<tk.length&&/^\d+$/.test(tk[j]))cand=tk[j];
     else if(i>0&&/^\d+$/.test(tk[i-1]))cand=tk[i-1];
-    for(let k=i;k<j;k++)tk[k]='|';}break}}
+    for(let k=i;k<j;k++)tk[k]='|';break}}}
  const rest=' '+tk.join(' ')+' ';
- m=rest.match(/ (?:عقار|عماره|مبني|بنايه|برج|رقم) (?:رقم )?(\d+[ا-ي]?)/);
+ m=rest.match(/ (?:عقار|عماره|مبني|بنايه|برج|فيلا|وحده|قطعه|بلوك|رقم) (?:رقم )?(\d+[ا-ي]?)/);
  r.building=m?m[1]:cand;
+ m=rest.match(DET);r.detail=m?m[0].trim():'';
  return r}
 
-function evalRow(r,needApt){
+function evalRow(r,needApt,prof){prof=prof||'flex';
+ if(!r.gov&&prof==='flex'&&r.areaGovs.length){r.gov=r.areaGovs[0];r.govInf=true}
  if(!r.gov)r.miss.push('المحافظة');
  if(!r.area)r.miss.push('المنطقة');
- if(!r.street)r.miss.push('الشارع');
- if(!r.building)r.miss.push('رقم العقار/العمارة');
- if(!r.floor)r.miss.push('الدور');
+ if(prof==='strict'){if(!r.street)r.miss.push('الشارع');if(!r.building)r.miss.push('رقم العقار/العمارة');if(!r.floor)r.miss.push('الدور')}
+ else if(!(r.street||r.building||r.detail||r.landmark))r.miss.push('تفصيل العنوان (شارع/عقار/كمبوند/علامة مميزة)');
  if(needApt&&!r.apt)r.miss.push('رقم الشقة');
- if(!r.gov&&r.areaGov)r.prob.push('المحافظة غير مكتوبة (المنطقة تتبع '+r.areaGov+')');
- const mm=r.gov&&r.areaGov&&r.gov!==r.areaGov;
- if(mm)r.prob.push(`المنطقة «${r.area}» تتبع ${r.areaGov} وليس ${r.gov}`);
+ if(!r.gov&&r.areaGovs.length&&prof==='strict')r.prob.push('المحافظة غير مكتوبة (المنطقة تتبع '+r.areaGovs.join(' أو ')+')');
+ const mm=r.gov&&r.areaGovs.length&&!r.areaGovs.includes(r.gov);
+ if(mm)r.prob.push(`المنطقة «${r.area}» تتبع ${r.areaGovs.join(' أو ')} وليس ${r.gov}`);
  if(r.unk)r.prob.push(`المنطقة «${r.area}» غير موجودة في القاموس — راجعها`);
  if(r.floorBad)r.prob.push(`الدور «${r.floor}» غير مفهوم`);
  r.status=r.miss.length?'incomplete':mm?'mismatch':(r.unk||r.floorBad)?'review':'ok';
@@ -133,25 +166,68 @@ function render(){
  $('sum').innerHTML=`<div class="all"><b>${rows.length}</b>الإجمالي</div>`+Object.keys(LBL).map(k=>`<div class="${k}"><b>${cnt[k]}</b>${LBL[k]}</div>`).join('');
  $('chips').innerHTML=['all',...Object.keys(LBL)].map(k=>`<button class="${k==='all'?'all':k} ${filter===k?'on':''}" data-k="${k}">${k==='all'?'الكل':LBL[k]}</button>`).join('');
  $('tb').innerHTML=rows.map((r,i)=>({r,i})).filter(x=>filter==='all'||x.r.status===filter).map(({r,i})=>
-  `<tr><td>${i+1}</td><td>${esc(r.raw)}</td><td>${cell(r.gov)}</td><td>${cell(r.area)}</td><td>${cell(r.street)}</td><td>${cell(r.building)}</td><td>${cell(r.floor)}</td><td>${cell(r.apt)}</td><td>${esc(r.landmark||'')}</td>
-  <td><span class="badge ${r.status}">${LBL[r.status]}</span>${r.miss.length?`<div class="note">ناقص: ${r.miss.join('، ')}</div>`:''}${r.prob.map(p=>`<div class="note">${esc(p)}</div>`).join('')}</td></tr>`).join('');
+  `<tr><td>${r.rec?esc(String(Object.values(r.rec)[0]??'')):i+1}</td><td>${esc(r.raw)}</td><td>${cell(r.gov)}${r.govInf?'<div class="note">(مستنتجة)</div>':''}</td><td>${cell(r.area)}</td><td>${cell(r.street)}</td><td>${cell(r.building)}</td><td>${cell(r.floor)}</td><td>${cell(r.apt)}</td><td>${esc(r.landmark||'')}</td>
+  <td><span class="badge ${r.status}">${LBL[r.status]}</span>${r.fixed?' <span class="badge all">مُصحَّح</span>':''} <button data-e="${i}">تصحيح</button>${r.sugg?`<div class="note">المقترح: ${esc(r.sugg)}</div>`:''}${r.miss.length?`<div class="note">ناقص: ${r.miss.join('، ')}</div>`:''}${r.prob.map(p=>`<div class="note">${esc(p)}</div>`).join('')}</td></tr>`).join('');
  $('res').hidden=false}
 
-function csv(list){const h=['العنوان','الحالة','ناقص','ملاحظات','المحافظة','المنطقة','الشارع','العقار','الدور','الشقة','علامة مميزة'];
- const q=v=>'"'+String(v||'').replace(/"/g,'""')+'"';
- return '\ufeff'+[h,...list.map(r=>[r.raw,LBL[r.status],r.miss.join(' | '),r.prob.join(' | '),r.gov,r.area,r.street,r.building,r.floor,r.apt,r.landmark])].map(a=>a.map(q).join(',')).join('\r\n')}
+function csv(list){const ok=RECS&&RECS.length?Object.keys(RECS[0]):[];
+ const h=[...(ok.length?ok:['العنوان']),'الحالة','ناقص','ملاحظات','التعديل المقترح','المحافظة','المنطقة','الشارع','العقار','الدور','الشقة','علامة مميزة'];
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ const body=list.map(r=>[...(ok.length&&r.rec?ok.map(k=>r.rec[k]):[r.raw]),LBL[r.status],r.miss.join(' | '),r.prob.join(' | '),r.sugg,r.gov,r.area,r.street,r.building,r.floor,r.apt,r.landmark]);
+ return '\ufeff'+[h,...body].map(a=>a.map(q).join(',')).join('\r\n')}
 function dl(name,txt){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));a.download=name;a.click()}
 
-$('go').onclick=()=>{build();const need=$('apt').checked;
- rows=$('in').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>evalRow(parse(s),need));filter='all';render()};
+const lines=()=>$('in').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+let RECS=null,AC='';
+const srcLines=()=>RECS?RECS.map(r=>String(r[AC]??'')):lines();
+function analyze(ls){const need=$('apt').checked,prof=$('prof').value;rows=ls.map((x,i)=>{const r=parse(x);r.key=norm(x).replace(/[\s|،,.\-\/]+/g,' ').trim();const o=L.overrides[r.key];if(o)applyO(r,o);r.rec=RECS?RECS[i]:null;return evalRow(r,need,prof)})}
+$('go').onclick=()=>{build();analyze(srcLines());filter='all';render()};
+let cur=-1;
+$('tb').onclick=e=>{const i=e.target.dataset.e;if(i===undefined)return;cur=+i;const r=rows[cur];
+ $('f_raw').textContent=r.raw;$('f_gov').value=r.gov||(r.areaGovs&&r.areaGovs[0])||'';
+ ['area','street','building','floor','apt','landmark'].forEach(k=>$('f_'+k).value=r[k]||'');$('f_sugg').value=r.sugg||'';$('f_del').hidden=!r.fixed;$('dlg').showModal()};
+$('f_cancel').onclick=()=>$('dlg').close();
+function rerun(){analyze(RECS?srcLines():rows.map(r=>r.raw));render();stats()}
+$('f_save').onclick=()=>{const r=rows[cur],g=k=>$('f_'+k).value.trim();
+ const o={gov:g('gov'),area:g('area'),street:g('street'),building:g('building'),floor:g('floor'),apt:g('apt'),landmark:g('landmark'),sugg:g('sugg')};
+ L.overrides[r.key]=o;
+ if(o.area&&o.gov){const ex=AREG[norm(o.area)]||[];if(!ex.includes(o.gov))(L.areas[o.gov]=L.areas[o.gov]||[]).push(o.area)}
+ if(o.floor&&!floorOk(o.floor))L.floors.push(noAl(norm(o.floor)));
+ saveL();build();$('dlg').close();rerun()};
+$('f_del').onclick=()=>{delete L.overrides[rows[cur].key];saveL();$('dlg').close();rerun()};
 $('chips').onclick=e=>{const k=e.target.dataset.k;if(k){filter=k;render()}};
 $('exp1').onclick=()=>dl('addresses-problems.csv',csv(rows.filter(r=>r.status!=='ok')));
 $('exp2').onclick=()=>dl('addresses-all.csv',csv(rows));
-$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{$('in').value=String(fr.result).replace(/^\ufeff/,'');$('go').click()};fr.readAsText(f,'utf-8')};
-$('aadd').onclick=()=>{const a=$('an').value.trim(),g=$('ag').value;if(!a)return;let x={};try{x=JSON.parse(localStorage.getItem('xa')||'{}')}catch(e){}(x[g]=x[g]||[]).push(a);try{localStorage.setItem('xa',JSON.stringify(x))}catch(e){}$('an').value='';build();alert('تمت الإضافة')};
+function csvParse(txt){txt=txt.replace(/^\ufeff/,'');const d=[',',';','\t'].map(c=>[c,txt.split(/\r?\n/)[0].split(c).length]).sort((a,b)=>b[1]-a[1])[0][0];
+ const out=[];let row=[],f='',q=false;
+ for(let i=0;i<txt.length;i++){const c=txt[i];
+  if(q){if(c==='"'){if(txt[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+  else if(c==='"')q=true;else if(c===d){row.push(f);f=''}
+  else if(c==='\n'||c==='\r'){if(c==='\r'&&txt[i+1]==='\n')i++;row.push(f);f='';out.push(row);row=[]}else f+=c}
+ if(f||row.length){row.push(f);out.push(row)}return out.filter(r=>r.some(x=>String(x).trim()))}
+function loadTable(a){const h=a[0].map((x,i)=>String(x).trim()||('col'+(i+1)));
+ RECS=a.slice(1).map(r=>{const o={};h.forEach((k,i)=>o[k]=r[i]??'');return o});
+ AC=h.find(k=>/street|address|عنوان|شارع/i.test(k)&&!/national/i.test(k))||h.find(k=>/address|عنوان/i.test(k))||h[h.length-1];
+ $('acol').innerHTML=h.map(k=>`<option${k===AC?' selected':''}>${esc(k)}</option>`).join('');$('acw').hidden=false;$('in').value='';
+ $('fi').textContent=`تم تحميل ${RECS.length} صف · عمود العنوان: ${AC}`;$('fi').hidden=false}
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const ext=f.name.split('.').pop().toLowerCase();
+ if(ext==='xlsx'||ext==='xls'){if(typeof XLSX==='undefined'){alert('مكتبة Excel محتاجة إنترنت أول مرة. احفظ الشيت CSV وارفعه.');return}
+  f.arrayBuffer().then(b=>{const wb=XLSX.read(b);loadTable(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''}));$('go').click()});return}
+ const fr=new FileReader();fr.onload=()=>{const t=String(fr.result);
+  if(ext==='csv')loadTable(csvParse(t));else{RECS=null;$('acw').hidden=true;$('fi').hidden=true;$('in').value=t.replace(/^\ufeff/,'')}$('go').click()};fr.readAsText(f,'utf-8')};
+$('acol').onchange=()=>{AC=$('acol').value;$('fi').textContent=`عمود العنوان: ${AC}`;$('go').click()};
+$('in').oninput=()=>{if(RECS){RECS=null;$('acw').hidden=true;$('fi').hidden=true}};
+$('prof').onchange=()=>{if(rows.length)$('go').click()};
+$('aadd').onclick=()=>{const a=$('an').value.trim(),g=$('ag').value;if(!a)return;(L.areas[g]=L.areas[g]||[]).push(a);saveL();$('an').value='';build();if(rows.length)rerun()};
+$('aladd').onclick=()=>{const v=norm($('al_v').value).replace(/\s+/g,' '),a=$('al_a').value.trim();if(!v||!a)return;if(!AREG[norm(a)]){alert('المنطقة الصحيحة غير موجودة في القاموس — أضفها أولاً');return}
+ L.aliases[v]=a;saveL();$('al_v').value=$('al_a').value='';build();if(rows.length)rerun()};
+$('lexp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(L,null,1)],{type:'application/json'}));a.download='learned.json';a.click()};
+$('limp').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{mergeL(JSON.parse(fr.result));saveL();build();if(rows.length)rerun();alert('تم الدمج')}catch(x){alert('ملف غير صالح')}};fr.readAsText(f)};
+$('lrst').onclick=()=>{if(confirm('مسح كل ما تعلّمه التطبيق على هذا الجهاز؟')){L={areas:{},aliases:{},overrides:{},floors:[]};saveL();build();if(rows.length)rerun()}};
 let dp;addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;$('inst').hidden=false});
 $('inst').onclick=async()=>{if(dp){dp.prompt();dp=null;$('inst').hidden=true}};
 build();
+fetch('learned.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{if(j){mergeL(j,true);build()}}).catch(()=>{});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
