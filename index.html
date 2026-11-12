@@ -29,6 +29,8 @@ th,td{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:right;vertica
 .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;white-space:nowrap}
 .miss{color:var(--er)}.note{color:var(--mut);font-size:12px}
 dialog{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:12px;width:min(520px,94vw)}dialog::backdrop{background:#0008}dialog label{display:block;font-size:13px;color:var(--mut);margin-top:8px}dialog input,dialog select{width:100%}.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.own-only{display:none!important}body.own .own-only{display:block!important}
+.kb{max-height:300px;overflow:auto;font-size:13px}.kb div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--bd);padding:4px 0}.kb h5{margin:8px 0 2px;color:var(--mut)}
 details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
@@ -57,14 +59,17 @@ details summary{cursor:pointer;font-weight:600}
 <div class="tw"><table><thead><tr><th>م / المعرّف</th><th>العنوان</th><th>المحافظة</th><th>المنطقة</th><th>الشارع</th><th>العقار</th><th>الدور</th><th>الشقة</th><th>علامة</th><th>الحالة / الملاحظات</th></tr></thead><tbody id="tb"></tbody></table></div>
 </div>
 
-<details class="c"><summary>التعلّم والقاموس <span id="lst" class="note"></span></summary>
+<details class="c own-only"><summary>التعلّم والقاموس <span id="lst" class="note"></span></summary>
 <p class="note">كل تصحيح تعمله (زر «تصحيح» في الجدول) بيتحفظ، والتطبيق بيستخدمه في التقييمات الجاية: المناطق الجديدة بتتضاف للقاموس، والعنوان المتصحح بيتعرف تاني.</p>
 <div class="r"><input type="text" id="an" placeholder="منطقة جديدة"><select id="ag"></select><button id="aadd">إضافة منطقة</button></div>
 <div class="r"><input type="text" id="al_v" placeholder="كتابة بديلة/غلط شائع"><input type="text" id="al_a" list="adl" placeholder="المنطقة الصحيحة"><button id="aladd">إضافة اسم بديل</button></div>
+<h4 style="margin:12px 0 4px">ما تعلّمه التطبيق (اضغط ✕ للحذف)</h4><input type="text" id="kq" placeholder="بحث..." style="width:100%"><div class="kb" id="kb"></div>
 <div class="r"><label>تعلّم من شيت (Excel / CSV): <input type="file" id="lsheet" accept=".csv,.txt,.xlsx,.xls"></label></div>
 <p class="note">الأفضل شيت فيه عمود «المحافظة» وعمود «المنطقة» — التطبيق يضيف كل منطقة تحت محافظتها. ولو فيه عمود عنوان بس، هيتعلم المناطق اللي مكتوبة بصيغة «مدينة/منطقة/حي ...».</p>
 <div class="r"><button id="lexp">تصدير التعلّم (learned.json)</button><label>استيراد ملف learned.json فقط: <input type="file" id="limp" accept=".json"></label><button id="lrst">مسح التعلّم</button></div>
-<p class="note">التعلّم محفوظ على جهازك. لمشاركته مع كل الأجهزة: صدّر learned.json وارفعه على الريبو جنب index.html، والتطبيق هيحمّله تلقائياً.</p></details>
+<h4 style="margin:12px 0 4px">النشر للكل</h4>
+<div class="r"><input type="text" id="repo" placeholder="user/repo"><input type="password" id="tok" placeholder="GitHub token"><button class="p" id="pub">نشر التعلّم للكل</button><button id="pull">استعادة من المنشور</button></div>
+<p class="note">التعديلات هنا مسودة على جهازك. «نشر التعلّم للكل» بيكتب learned.json في الريبو فيستفيد منه كل المستخدمين. محدش غيرك يقدر ينشر لأن النشر محتاج صلاحية كتابة على الريبو (التوكن).</p></details>
 <datalist id="adl"></datalist>
 <dialog id="dlg"><b>تصحيح العنوان</b><p class="note" id="f_raw"></p>
 <div class="g2"><label>المحافظة<select id="f_gov"></select></label><label>المنطقة<input type="text" id="f_area" list="adl"></label>
@@ -73,6 +78,7 @@ details summary{cursor:pointer;font-weight:600}
 <label>علامة مميزة<input type="text" id="f_landmark"></label>
 <label>التعديل المقترح الأنسب (العنوان الصحيح كامل)<textarea id="f_sugg" style="min-height:60px"></textarea></label>
 <div class="r"><button class="p" id="f_save">حفظ وتعلّم</button><button id="f_del" hidden>إلغاء التصحيح</button><button id="f_cancel">إغلاق</button></div></dialog>
+<p class="note" style="text-align:center"><button id="own">🔒 وضع المالك</button></p>
 </div>
 
 <script src="areas.js"></script>
@@ -93,8 +99,14 @@ function mergeL(x,base){if(!x)return;const u=(a,b)=>[...new Set([...(a||[]),...(
  L.aliases=base?{...x.aliases,...L.aliases}:{...L.aliases,...x.aliases};
  L.overrides=base?{...x.overrides,...L.overrides}:{...L.overrides,...x.overrides};
  L.floors=u(L.floors,x.floors)}
-function saveL(){try{localStorage.setItem('learn',JSON.stringify(L))}catch(e){}}
-(function(){try{mergeL(JSON.parse(localStorage.getItem('learn')||'null'));const x=JSON.parse(localStorage.getItem('xa')||'{}');for(const g in x)(L.areas[g]=L.areas[g]||[]).push(...x[g])}catch(e){}})();
+function saveL(){if(!OWNER)return;try{localStorage.setItem('learn',JSON.stringify(L))}catch(e){}}
+let PUB=null,OWNER=false;try{OWNER=sessionStorage.getItem('own')==='1'}catch(e){}
+function initL(){L={areas:{},aliases:{},overrides:{},floors:[]};
+ if(OWNER){try{const d=JSON.parse(localStorage.getItem('learn')||'null');if(d){L={areas:d.areas||{},aliases:d.aliases||{},overrides:d.overrides||{},floors:d.floors||[]};return}}catch(e){}}
+ if(PUB)mergeL(PUB)}
+initL();
+const canon=x=>{x=x||{};const o=g=>Object.keys(g||{}).sort().map(k=>[k,g[k]]);return JSON.stringify([o(Object.fromEntries(Object.entries(x.areas||{}).map(([g,a])=>[g,[...a].sort()]))),o(x.aliases),o(x.overrides),[...(x.floors||[])].sort()])};
+const dirty=()=>canon(L)!==canon(PUB||{});
 const floorOk=f=>{f=noAl(norm(f));return /^\d+$/.test(f)||ORD.includes(f)||L.floors.includes(f)};
 function getAreas(){const a=JSON.parse(JSON.stringify(window.AREAS));for(const g in L.areas)(a[g]=a[g]||[]).push(...L.areas[g]);return a}
 let GOV=[],AR=[],ALI=[],AREG={};
@@ -107,7 +119,7 @@ function build(){const A=getAreas();GOV=[];AR=[];AREG={};
  const og=Object.keys(A).map(g=>`<option>${g}</option>`).join('');$('ag').innerHTML=og;$('f_gov').innerHTML='<option value="">—</option>'+og;
  $('adl').innerHTML=[...new Set(AR.map(x=>x.a))].map(a=>`<option value="${a}">`).join('');stats()}
 function applyO(r,o){['gov','area','street','building','floor','apt','landmark'].forEach(k=>r[k]=o[k]||'');r.areaGovs=AREG[norm(r.area)]||[];r.unk=!!r.area&&!r.areaGovs.length;r.floorBad=!!r.floor&&!floorOk(r.floor);r.fixed=true;r.sugg=o.sugg||''}
-function stats(){const n=Object.values(L.areas).reduce((a,b)=>a+b.length,0);$('lst').textContent=`(مناطق متعلَّمة ${n} · أسماء بديلة ${Object.keys(L.aliases).length} · تصحيحات ${Object.keys(L.overrides).length})`}
+function stats(){const n=Object.values(L.areas).reduce((a,b)=>a+b.length,0);$('lst').textContent=`(مناطق متعلَّمة ${n} · أسماء بديلة ${Object.keys(L.aliases).length} · تصحيحات ${Object.keys(L.overrides).length})`+(OWNER&&dirty()?' · ⚠ تغييرات غير منشورة':'');if(OWNER&&typeof renderKB==='function')renderKB()}
 const has=(t,p)=>t.includes(' '+p+' ');
 const cut=(t,p)=>t.split(' '+p+' ').join(' | ');
 
@@ -169,7 +181,7 @@ function render(){
  $('chips').innerHTML=['all',...Object.keys(LBL)].map(k=>`<button class="${k==='all'?'all':k} ${filter===k?'on':''}" data-k="${k}">${k==='all'?'الكل':LBL[k]}</button>`).join('');
  $('tb').innerHTML=rows.map((r,i)=>({r,i})).filter(x=>filter==='all'||x.r.status===filter).map(({r,i})=>
   `<tr><td>${r.rec?esc(String(Object.values(r.rec)[0]??'')):i+1}</td><td>${esc(r.raw)}</td><td>${cell(r.gov)}${r.govInf?'<div class="note">(مستنتجة)</div>':''}</td><td>${cell(r.area)}</td><td>${cell(r.street)}</td><td>${cell(r.building)}</td><td>${cell(r.floor)}</td><td>${cell(r.apt)}</td><td>${esc(r.landmark||'')}</td>
-  <td><span class="badge ${r.status}">${LBL[r.status]}</span>${r.fixed?' <span class="badge all">مُصحَّح</span>':''} <button data-e="${i}">تصحيح</button>${r.sugg?`<div class="note">المقترح: ${esc(r.sugg)}</div>`:''}${r.miss.length?`<div class="note">ناقص: ${r.miss.join('، ')}</div>`:''}${r.prob.map(p=>`<div class="note">${esc(p)}</div>`).join('')}</td></tr>`).join('');
+  <td><span class="badge ${r.status}">${LBL[r.status]}</span>${r.fixed?' <span class="badge all">مُصحَّح</span>':''} ${OWNER?`<button data-e="${i}">تصحيح</button>`:''}${r.sugg?`<div class="note">المقترح: ${esc(r.sugg)}</div>`:''}${r.miss.length?`<div class="note">ناقص: ${r.miss.join('، ')}</div>`:''}${r.prob.map(p=>`<div class="note">${esc(p)}</div>`).join('')}</td></tr>`).join('');
  $('res').hidden=false}
 
 function csv(list){const ok=RECS&&RECS.length?Object.keys(RECS[0]):[];
@@ -185,18 +197,18 @@ const srcLines=()=>RECS?RECS.map(r=>String(r[AC]??'')):lines();
 function analyze(ls){const need=$('apt').checked,prof=$('prof').value;rows=ls.map((x,i)=>{const r=parse(x);r.key=norm(x).replace(/[\s|،,.\-\/]+/g,' ').trim();const o=L.overrides[r.key];if(o)applyO(r,o);r.rec=RECS?RECS[i]:null;return evalRow(r,need,prof)})}
 $('go').onclick=()=>{build();analyze(srcLines());filter='all';render()};
 let cur=-1;
-$('tb').onclick=e=>{const i=e.target.dataset.e;if(i===undefined)return;cur=+i;const r=rows[cur];
+$('tb').onclick=e=>{if(!OWNER)return;const i=e.target.dataset.e;if(i===undefined)return;cur=+i;const r=rows[cur];
  $('f_raw').textContent=r.raw;$('f_gov').value=r.gov||(r.areaGovs&&r.areaGovs[0])||'';
  ['area','street','building','floor','apt','landmark'].forEach(k=>$('f_'+k).value=r[k]||'');$('f_sugg').value=r.sugg||'';$('f_del').hidden=!r.fixed;$('dlg').showModal()};
 $('f_cancel').onclick=()=>$('dlg').close();
 function rerun(){analyze(RECS?srcLines():rows.map(r=>r.raw));render();stats()}
-$('f_save').onclick=()=>{const r=rows[cur],g=k=>$('f_'+k).value.trim();
+$('f_save').onclick=()=>{if(!OWNER)return;const r=rows[cur],g=k=>$('f_'+k).value.trim();
  const o={gov:g('gov'),area:g('area'),street:g('street'),building:g('building'),floor:g('floor'),apt:g('apt'),landmark:g('landmark'),sugg:g('sugg')};
  L.overrides[r.key]=o;
  if(o.area&&o.gov){const ex=AREG[norm(o.area)]||[];if(!ex.includes(o.gov))(L.areas[o.gov]=L.areas[o.gov]||[]).push(o.area)}
  if(o.floor&&!floorOk(o.floor))L.floors.push(noAl(norm(o.floor)));
  saveL();build();$('dlg').close();rerun()};
-$('f_del').onclick=()=>{delete L.overrides[rows[cur].key];saveL();$('dlg').close();rerun()};
+$('f_del').onclick=()=>{if(!OWNER)return;delete L.overrides[rows[cur].key];saveL();$('dlg').close();rerun()};
 $('chips').onclick=e=>{const k=e.target.dataset.k;if(k){filter=k;render()}};
 $('exp1').onclick=()=>dl('addresses-problems.csv',csv(rows.filter(r=>r.status!=='ok')));
 $('exp2').onclick=()=>dl('addresses-all.csv',csv(rows));
@@ -220,16 +232,43 @@ $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const ext=f.name.s
 $('acol').onchange=()=>{AC=$('acol').value;$('fi').textContent=`عمود العنوان: ${AC}`;$('go').click()};
 $('in').oninput=()=>{if(RECS){RECS=null;$('acw').hidden=true;$('fi').hidden=true}};
 $('prof').onchange=()=>{if(rows.length)$('go').click()};
-$('aadd').onclick=()=>{const a=$('an').value.trim(),g=$('ag').value;if(!a)return;(L.areas[g]=L.areas[g]||[]).push(a);saveL();$('an').value='';build();if(rows.length)rerun()};
-$('aladd').onclick=()=>{const v=norm($('al_v').value).replace(/\s+/g,' '),a=$('al_a').value.trim();if(!v||!a)return;if(!AREG[norm(a)]){alert('المنطقة الصحيحة غير موجودة في القاموس — أضفها أولاً');return}
+$('aadd').onclick=()=>{if(!OWNER)return;const a=$('an').value.trim(),g=$('ag').value;if(!a)return;(L.areas[g]=L.areas[g]||[]).push(a);saveL();$('an').value='';build();if(rows.length)rerun()};
+$('aladd').onclick=()=>{if(!OWNER)return;const v=norm($('al_v').value).replace(/\s+/g,' '),a=$('al_a').value.trim();if(!v||!a)return;if(!AREG[norm(a)]){alert('المنطقة الصحيحة غير موجودة في القاموس — أضفها أولاً');return}
  L.aliases[v]=a;saveL();$('al_v').value=$('al_a').value='';build();if(rows.length)rerun()};
 $('lexp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(L,null,1)],{type:'application/json'}));a.download='learned.json';a.click()};
-$('limp').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{mergeL(JSON.parse(fr.result));saveL();build();if(rows.length)rerun();alert('تم الدمج')}catch(x){alert('ملف غير صالح')}};fr.readAsText(f)};
+$('limp').onchange=e=>{if(!OWNER)return;const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{mergeL(JSON.parse(fr.result));saveL();build();if(rows.length)rerun();alert('تم الدمج')}catch(x){alert('ملف غير صالح')}};fr.readAsText(f)};
+const OWNER_HASH="24698d6ebaa0f10e16e5142148fa5de0d54313d13484d5cb8cd948464a063d4f";
+async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function setOwnerUI(){document.body.classList.toggle('own',OWNER);$('own').textContent=OWNER?'🔓 خروج من وضع المالك':'🔒 وضع المالك';
+ const m=location.hostname.match(/^(.+)\.github\.io$/);if(!$('repo').value)$('repo').value=m?m[1]+'/'+(location.pathname.split('/')[1]||''):'';
+ try{if(!$('tok').value)$('tok').value=localStorage.getItem('ghtok')||''}catch(e){}}
+$('own').onclick=async()=>{if(OWNER){OWNER=false;try{sessionStorage.removeItem('own')}catch(e){}}
+ else{const p=prompt('كلمة سر المالك');if(!p)return;if(await sha(p.trim())!==OWNER_HASH){alert('كلمة السر غلط');return}OWNER=true;try{sessionStorage.setItem('own','1')}catch(e){}}
+ initL();setOwnerUI();build();if(rows.length)rerun()};
+function renderKB(){const box=$('kb');if(!box)return;const q=norm($('kq').value||''),hit=x=>!q||norm(x).includes(q);let h='';
+ const sec=(t,it)=>{it=it.filter(x=>hit(x.t));if(it.length)h+=`<h5>${t} (${it.length})</h5>`+it.map(x=>`<div><span>${esc(x.t)}</span><button data-del="${esc(x.d)}">✕</button></div>`).join('')};
+ sec('مناطق',Object.entries(L.areas).flatMap(([g,a])=>a.map((n,i)=>({t:`${n} ← ${g}`,d:`a|${g}|${i}`}))));
+ sec('أسماء بديلة',Object.entries(L.aliases).map(([v,a])=>({t:`${v} ← ${a}`,d:`l|${v}`})));
+ sec('تصحيحات عناوين',Object.entries(L.overrides).map(([k,o])=>({t:`${k.slice(0,60)} ← ${[o.gov,o.area,o.street].filter(Boolean).join(' / ')}`,d:`o|${k}`})));
+ sec('صيغ الدور',L.floors.map((f,i)=>({t:f,d:`f|${i}`})));
+ box.innerHTML=h||'<div class="note">لسه ما اتعلّمش حاجة</div>'}
+$('kq').oninput=renderKB;
+$('kb').onclick=e=>{if(!OWNER)return;const d=e.target.dataset.del;if(!d)return;const p=d.split('|'),k=p.slice(1).join('|');
+ if(p[0]==='a'){L.areas[p[1]].splice(+p[2],1);if(!L.areas[p[1]].length)delete L.areas[p[1]]}else if(p[0]==='l')delete L.aliases[k];else if(p[0]==='o')delete L.overrides[k];else L.floors.splice(+p[1],1);
+ saveL();build();if(rows.length)rerun()};
+$('pull').onclick=()=>{if(!OWNER)return;if(!confirm('هتتمسح تعديلاتك غير المنشورة وترجع للنسخة المنشورة. متأكد؟'))return;try{localStorage.removeItem('learn')}catch(e){}initL();saveL();build();if(rows.length)rerun()};
+$('pub').onclick=async()=>{if(!OWNER)return;const repo=$('repo').value.trim(),tok=$('tok').value.trim();if(!repo||!tok){alert('اكتب اسم الريبو (user/repo) والتوكن');return}
+ const api=`https://api.github.com/repos/${repo}/contents/learned.json`,H={Authorization:'Bearer '+tok,Accept:'application/vnd.github+json'};
+ try{let sh;const g=await fetch(api,{headers:H});if(g.ok)sh=(await g.json()).sha;else if(g.status!==404)throw new Error('قراءة '+g.status);
+  const body={message:'Update learned data',content:btoa(unescape(encodeURIComponent(JSON.stringify(L,null,1)))),...(sh?{sha:sh}:{})};
+  const p=await fetch(api,{method:'PUT',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!p.ok)throw new Error('كتابة '+p.status);
+  PUB=JSON.parse(JSON.stringify(L));try{localStorage.setItem('ghtok',tok)}catch(e){}stats();alert('تم النشر. هيظهر لكل المستخدمين خلال دقيقة أو اتنين.')}
+ catch(e){alert('فشل النشر: '+e.message+'\nتأكد من التوكن وإن صلاحية Contents = Read and write على الريبو ده.')}};
 function readTable(f,cb){const ext=f.name.split('.').pop().toLowerCase();
  if(ext==='xlsx'||ext==='xls'){if(typeof XLSX==='undefined'){alert('مكتبة Excel محتاجة إنترنت أول مرة. احفظ الشيت CSV وارفعه.');return}
   f.arrayBuffer().then(b=>{const wb=XLSX.read(b);cb(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''}))});return}
  const fr=new FileReader();fr.onload=()=>cb(csvParse(String(fr.result)));fr.readAsText(f,'utf-8')}
-$('lsheet').onchange=e=>{const f=e.target.files[0];if(!f)return;e.target.value='';
+$('lsheet').onchange=e=>{if(!OWNER)return;const f=e.target.files[0];if(!f)return;e.target.value='';
  readTable(f,a=>{if(!a.length){alert('الشيت فاضي');return}
   const h=a[0].map(x=>String(x).trim()),R=a.slice(1);let added=0;
   const gi=h.findIndex(k=>/محافظ|governorate|^gov/i.test(k)),ai=h.findIndex(k=>/منطق|^area|district/i.test(k));
@@ -241,11 +280,12 @@ $('lsheet').onchange=e=>{const f=e.target.files[0];if(!f)return;e.target.value='
   else R.forEach(r=>{const p=parse(String(r[ci]??''));if(p.gov&&p.unk&&p.area)add(p.gov,p.area)});
   saveL();build();if(rows.length)rerun();
   alert(`تم تحليل ${R.length} صف وتعلّمت ${added} منطقة جديدة`+(added?'':'\n(لو الشيت من غير عمودي المحافظة والمنطقة، استخدم زر «تصحيح» في الجدول)'))})};
-$('lrst').onclick=()=>{if(confirm('مسح كل ما تعلّمه التطبيق على هذا الجهاز؟')){L={areas:{},aliases:{},overrides:{},floors:[]};saveL();build();if(rows.length)rerun()}};
+$('lrst').onclick=()=>{if(!OWNER)return;if(confirm('مسح كل ما تعلّمه التطبيق على هذا الجهاز؟')){L={areas:{},aliases:{},overrides:{},floors:[]};saveL();build();if(rows.length)rerun()}};
 let dp;addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;$('inst').hidden=false});
 $('inst').onclick=async()=>{if(dp){dp.prompt();dp=null;$('inst').hidden=true}};
 build();
-fetch('learned.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{if(j){mergeL(j,true);build()}}).catch(()=>{});
+fetch('learned.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{PUB=j;initL();build();if(rows.length)rerun()}).catch(()=>{});
+setOwnerUI();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
