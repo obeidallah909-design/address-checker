@@ -61,7 +61,9 @@ details summary{cursor:pointer;font-weight:600}
 <p class="note">كل تصحيح تعمله (زر «تصحيح» في الجدول) بيتحفظ، والتطبيق بيستخدمه في التقييمات الجاية: المناطق الجديدة بتتضاف للقاموس، والعنوان المتصحح بيتعرف تاني.</p>
 <div class="r"><input type="text" id="an" placeholder="منطقة جديدة"><select id="ag"></select><button id="aadd">إضافة منطقة</button></div>
 <div class="r"><input type="text" id="al_v" placeholder="كتابة بديلة/غلط شائع"><input type="text" id="al_a" list="adl" placeholder="المنطقة الصحيحة"><button id="aladd">إضافة اسم بديل</button></div>
-<div class="r"><button id="lexp">تصدير التعلّم (learned.json)</button><label>استيراد: <input type="file" id="limp" accept=".json"></label><button id="lrst">مسح التعلّم</button></div>
+<div class="r"><label>تعلّم من شيت (Excel / CSV): <input type="file" id="lsheet" accept=".csv,.txt,.xlsx,.xls"></label></div>
+<p class="note">الأفضل شيت فيه عمود «المحافظة» وعمود «المنطقة» — التطبيق يضيف كل منطقة تحت محافظتها. ولو فيه عمود عنوان بس، هيتعلم المناطق اللي مكتوبة بصيغة «مدينة/منطقة/حي ...».</p>
+<div class="r"><button id="lexp">تصدير التعلّم (learned.json)</button><label>استيراد ملف learned.json فقط: <input type="file" id="limp" accept=".json"></label><button id="lrst">مسح التعلّم</button></div>
 <p class="note">التعلّم محفوظ على جهازك. لمشاركته مع كل الأجهزة: صدّر learned.json وارفعه على الريبو جنب index.html، والتطبيق هيحمّله تلقائياً.</p></details>
 <datalist id="adl"></datalist>
 <dialog id="dlg"><b>تصحيح العنوان</b><p class="note" id="f_raw"></p>
@@ -223,6 +225,22 @@ $('aladd').onclick=()=>{const v=norm($('al_v').value).replace(/\s+/g,' '),a=$('a
  L.aliases[v]=a;saveL();$('al_v').value=$('al_a').value='';build();if(rows.length)rerun()};
 $('lexp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(L,null,1)],{type:'application/json'}));a.download='learned.json';a.click()};
 $('limp').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{mergeL(JSON.parse(fr.result));saveL();build();if(rows.length)rerun();alert('تم الدمج')}catch(x){alert('ملف غير صالح')}};fr.readAsText(f)};
+function readTable(f,cb){const ext=f.name.split('.').pop().toLowerCase();
+ if(ext==='xlsx'||ext==='xls'){if(typeof XLSX==='undefined'){alert('مكتبة Excel محتاجة إنترنت أول مرة. احفظ الشيت CSV وارفعه.');return}
+  f.arrayBuffer().then(b=>{const wb=XLSX.read(b);cb(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''}))});return}
+ const fr=new FileReader();fr.onload=()=>cb(csvParse(String(fr.result)));fr.readAsText(f,'utf-8')}
+$('lsheet').onchange=e=>{const f=e.target.files[0];if(!f)return;e.target.value='';
+ readTable(f,a=>{if(!a.length){alert('الشيت فاضي');return}
+  const h=a[0].map(x=>String(x).trim()),R=a.slice(1);let added=0;
+  const gi=h.findIndex(k=>/محافظ|governorate|^gov/i.test(k)),ai=h.findIndex(k=>/منطق|^area|district/i.test(k));
+  let ci=h.findIndex(k=>/street|address|عنوان|شارع/i.test(k)&&!/national/i.test(k));if(ci<0)ci=h.length-1;
+  const add=(g,ar)=>{ar=String(ar||'').trim();const n=norm(g).replace(/^محافظه /,'');const G=GOV.find(x=>x.v.includes(n)||x.v.includes(noAl(n)));if(!G||!ar)return;
+   const k=norm(ar);if((AREG[k]||[]).includes(G.g))return;(L.areas[G.g]=L.areas[G.g]||[]).push(ar);(AREG[k]=AREG[k]||[]).push(G.g);added++};
+  build();
+  if(gi>=0&&ai>=0)R.forEach(r=>add(r[gi],r[ai]));
+  else R.forEach(r=>{const p=parse(String(r[ci]??''));if(p.gov&&p.unk&&p.area)add(p.gov,p.area)});
+  saveL();build();if(rows.length)rerun();
+  alert(`تم تحليل ${R.length} صف وتعلّمت ${added} منطقة جديدة`+(added?'':'\n(لو الشيت من غير عمودي المحافظة والمنطقة، استخدم زر «تصحيح» في الجدول)'))})};
 $('lrst').onclick=()=>{if(confirm('مسح كل ما تعلّمه التطبيق على هذا الجهاز؟')){L={areas:{},aliases:{},overrides:{},floors:[]};saveL();build();if(rows.length)rerun()}};
 let dp;addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;$('inst').hidden=false});
 $('inst').onclick=async()=>{if(dp){dp.prompt();dp=null;$('inst').hidden=true}};
